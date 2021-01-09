@@ -1,3 +1,5 @@
+import Control.Applicative
+
 -- Ex 1
 data Expr = Val Int
   | Add Expr Expr
@@ -21,7 +23,7 @@ eval Throw = Nothing
 --                      Just n -> Just n
 --                      Nothing -> eval h
 -- rewrite:
-eval (Catch x h) = justOr (eval x) (eval h)
+eval (Catch x h) = (eval x) <|> (eval h)
 
 -- exec (comp e) s = eval e : s             -- Equation E1
 -- exec (comp' e c) s = exec c (eval e : s) -- Equation E2
@@ -82,22 +84,17 @@ eval (Catch x h) = justOr (eval x) (eval h)
 -- exec (comp' (Catch x h) c) s
 -- = { use E2 }
 -- exec c (eval (Catch x h) : s)
---- introduce justOr
-justOr :: Maybe a -> Maybe a -> Maybe a
-justOr (Just x) _ = Just x
-justOr Nothing y = y
----
--- = { rewrite eval (Catch x h) using justOr }
+-- = { rewrite eval (Catch x h) using <|> }
 -- = { apply eval }
--- exec c (justOr (eval x) (eval h) : s)
+-- exec c (((eval x) <|> (eval h)) : s)
 
 ---
--- exec c' (eval h : eval x : s) = exec c (justOr (eval x) (eval h) : s)
+-- exec c' (eval h : eval x : s) = exec c (((eval x) <|> (eval h)) : s)
 -- = { generalize }
--- exec c' (x' : h' : s) = exec c (justOr x' h' : s)
+-- exec c' (x' : h' : s) = exec c ((x' <|> h') : s)
 ---
 
--- = { define exec (CATCH c) (x : h : s) = exec c (justOr x h : s) }
+-- = { define exec (CATCH c) (x : h : s) = exec c ((x <|> h) : s) }
 -- = { unapply exec }
 -- exec (CATCH c) (eval x : eval h : s)
 -- = { induction hypothesis on x }
@@ -145,7 +142,25 @@ exec HALT s = s
 exec (PUSH n c) s = exec c (Just n : s)
 exec (THROW c) s = exec c (Nothing : s)
 exec (ADD c) (m : n : s) = exec c ((pure (+) <*> n <*> m) : s)
-exec (CATCH c) (x : h : s) = exec c (justOr x h : s)
+exec (CATCH c) (x : h : s) = exec c ((x <|> h) : s)
+
+printExpr :: Expr -> IO ()
+printExpr e = do putStr (show e)
+                 putStr " => "
+                 print (exec (comp e) [])
 
 main :: IO ()
-main = do return ()
+main =
+  do printExpr e1
+     printExpr e2
+     printExpr e3
+     printExpr e4
+     printExpr e5
+       where e1 = Add (Val 10) (Val 20)
+             e2 = Throw
+             e3 = Add Throw (Val 42)
+             e4 = Add (Catch
+                        (Add Throw (Val 100))
+                        (Val 0))
+                      (Val 20)
+             e5 = (Catch Throw Throw)
